@@ -72,6 +72,10 @@ La generación inicial `scripts/prepare-content.py` utiliza la versión local he
 
 Las pruebas unitarias cubren el cierre del acceso sin configuración, el rechazo de claves privilegiadas en configuración pública, estados y vencimiento de matrícula, rutas de descarga y ausencia de material pagado en el despliegue. Las pruebas de integración requieren un proyecto real: no se sustituyen por un formulario de ingreso simulado.
 
+`tests/database.test.mjs` ejecuta los mismos esquemas y funciones SQL en PostgreSQL local mediante PGlite. Comprueba permisos RLS, aislamiento de resultados, calificación en servidor, idempotencia de envíos, límites de intentos y bloqueo por suspensión o vencimiento. Esta prueba no reemplaza la comprobación final de Auth, Storage y correos en el proyecto Supabase real.
+
+`node scripts/prepare-install.mjs` reúne los esquemas y el banco en `artifacts/Instalar_Academia.sql`, un archivo local reservado al propietario para aplicar la configuración de forma transaccional. Contiene soluciones de examen y permanece fuera de Git y del sitio publicado.
+
 ## Referencias
 
 - [Autenticación con contraseña](https://supabase.com/docs/guides/auth/passwords)
