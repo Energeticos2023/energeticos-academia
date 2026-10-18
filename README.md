@@ -81,3 +81,11 @@ Las pruebas unitarias cubren el cierre del acceso sin configuración, el rechazo
 - [Autenticación con contraseña](https://supabase.com/docs/guides/auth/passwords)
 - [Control de acceso al almacenamiento](https://supabase.com/docs/guides/storage/security/access-control)
 - [GitHub Pages](https://docs.github.com/en/pages)
+
+## Solicitudes de inscripción y currícula pública
+
+La portada incluye enlaces a `#inscripcion`, `#programa` y `#como-acceder`. La solicitud prepara un correo al docente con nombre, correo de matrícula y empresa opcional. El visitante revisa y envía el mensaje desde su aplicación de correo; no se guarda una solicitud en Supabase ni se envía automáticamente. La página ofrece el correo directo como alternativa. No se solicita contraseña ni se cobra desde el formulario.
+
+Flujo del docente: responder con precio, condiciones, alcance y vigencia; verificar el pago; ejecutar `scripts/manage-students.mjs invitar` o activar una cuenta existente. El alumno define su contraseña mediante invitación o recuperación. Antes de usarlo con estudiantes reales, completar la configuración de Auth/SMTP y probar una invitación real con una cuenta propia. Las credenciales administrativas nunca deben publicarse en GitHub ni compartirse con alumnos.
+
+La currícula pública detalla las cinco unidades, el caso aplicado y las evaluaciones del Módulo 1. Los siguientes módulos están señalados como en preparación hasta incorporar el temario aprobado del autor. No se promete una fecha, precio o contenido de módulos todavía no aportados.

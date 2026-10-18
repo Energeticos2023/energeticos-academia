@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { validateConfig, enrollmentIsActive, isPrivateMaterialPath } from './access.mjs';
 import { createAssessmentMount } from './assessments.mjs';
+import './enrollment.mjs';
 
 const config = window.ACADEMY_CONFIG;
 const $ = s => document.querySelector(s);
