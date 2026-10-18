@@ -3,8 +3,8 @@ window.startAcademy = () => {
   'use strict';
   const KEY = 'energeticos-academia-m1-v1:' + window.ACADEMY.userId;
   const lessons = window.COURSE.lessons;
-  const valid = new Set([...lessons.map(l => l.id), 'practica']);
-  let state = { completed: [], last: 'proposito', draft: '', quiz: null };
+  const valid = new Set(lessons.map(l => l.id));
+  let state = { completed: [], last: 'proposito', draft: '', quiz: null, selfAssessments: {} };
   let storageAvailable = true;
   try {
     const saved = window.ACADEMY.initialProgress || JSON.parse(localStorage.getItem(KEY) || 'null');
@@ -12,9 +12,12 @@ window.startAcademy = () => {
       state.completed = Array.isArray(saved.completed) ? [...new Set(saved.completed.filter(id => valid.has(id)))] : [];
       state.last = valid.has(saved.last) ? saved.last : 'proposito';
       state.draft = typeof saved.draft === 'string' ? saved.draft : '';
+      state.selfAssessments = saved.selfAssessments && typeof saved.selfAssessments === 'object' && !Array.isArray(saved.selfAssessments) ? saved.selfAssessments : {};
       state.quiz = saved.quiz && Array.isArray(saved.quiz.answers) ? saved.quiz : null;
     }
   } catch { storageAvailable = false; }
+  window.ACADEMY.onSelfResult = (id, result) => { state.selfAssessments[id] = result; save(); };
+  window.ACADEMY.getSelfResult = id => state.selfAssessments[id];
   const $ = s => document.querySelector(s);
   const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const main = $('#main');
@@ -33,7 +36,7 @@ window.startAcademy = () => {
     const groups = [
       { title:'Bienvenida', number:'↗', ids:['proposito','caso'] },
       { title:'Módulo 1', number:'01', ids:['unidad-11','unidad-12','unidad-13','unidad-14','unidad-15'] },
-      { title:'Aplica lo aprendido', number:'✓', ids:['actividad','practica','cierre','bibliografia'] }
+      { title:'Aplica lo aprendido', number:'✓', ids:['actividad','evaluacion-final','cierre','bibliografia'] }
     ];
     $('#lesson-nav').innerHTML = `<a href="#inicio" class="nav-link ${current==='inicio'?'active':''}"><span class="state">▦</span>Vista general del curso</a>` + groups.map(g => `<div class="nav-section"><span class="square">${g.number}</span>${g.title}${g.number==='01'?'<small>7 h académicas</small>':''}</div>${g.ids.map(id => {
       const lesson=lessons.find(l=>l.id===id);const title=lesson ? lesson.title : 'Comprueba tus conocimientos';
@@ -61,10 +64,10 @@ window.startAcademy = () => {
   }
   function activityWorkspace() {return `<section class="resource-card"><span class="eyebrow">TU RECOMENDACIÓN EJECUTIVA</span><h2>Trabaja el caso de Áncash</h2><p>Registra tu decisión, los criterios utilizados, las evidencias y los datos pendientes. Tus notas se guardan en este navegador; puedes descargarlas para conservarlas o enviarlas al docente.</p><label for="case-draft">Notas y recomendación</label><textarea class="note-field" id="case-draft" placeholder="Tecnología recomendada:\nRequisitos obligatorios:\nEvidencias utilizadas:\nRiesgos y condiciones:\nInformación pendiente:\nDecisión sugerida:"></textarea><div class="lesson-actions"><button class="button secondary" id="download-notes">Descargar mis notas ↓</button><a class="text-link" href="mailto:jose.zena.p@uni.pe?subject=Consulta%20sobre%20el%20caso%20del%20M%C3%B3dulo%201">Consultar al docente ↗</a></div><p class="rubric-note">Este espacio no envía tareas ni asigna una calificación oficial.</p></section>`;}
   function lessonView(id) {
-    if(id==='practica')return quizView();
+    
     const l=lessons.find(l=>l.id===id);if(!l)return notFound();
     const index=lessons.indexOf(l);const previous=lessons[index-1];const next=lessons[index+1];
-    return `${crumb('Módulo 1')}<header class="lesson-header"><span class="eyebrow">MÓDULO 1 · ${esc(l.label.toUpperCase())}</span><h1>${esc(l.title)}</h1><p>Adquisición y selección de vehículos eléctricos</p></header><div class="reading-meta"><span>▤ Manual del participante · Edición octubre 2026</span></div><article class="lesson-content">${l.html}</article>${id==='actividad'?activityWorkspace():''}${id==='unidad-14'?`<section class="resource-card"><span class="eyebrow">APLICA EL CONCEPTO</span><h2>Explora la energía disponible</h2><p>Ejercicio idealizado: capacidad utilizable × ventana de SoC. No incluye pérdidas de recarga ni factores de la ruta.</p><form id="energy-form"><label>Batería utilizable (kWh) <input name="battery" type="number" min="0.1" max="2000" step="any" value="55" required></label><br><label>SoC inicial (%) <input name="initial" type="number" min="0" max="100" step="any" value="90" required></label><br><label>SoC mínimo (%) <input name="minimum" type="number" min="0" max="100" step="any" value="20" required></label><br><button class="button secondary" type="submit">Calcular energía</button><p id="energy-result" role="status"></p></form></section>`:''}<div class="lesson-actions"><a class="button secondary" href="#inicio">← Volver al módulo</a><button class="button primary" id="mark-complete" aria-pressed="false">Marcar como completado ✓</button></div>${id==='cierre'?'<a class="button secondary full" href="#leccion/practica" style="margin-top:18px">Comprueba tus conocimientos →</a>':''}<nav class="lesson-pagination" aria-label="Navegar entre actividades">${previous?`<a href="${link(previous.id)}"><small>ACTIVIDAD ANTERIOR</small>← ${esc(previous.title)}</a>`:'<span></span>'}${next?`<a href="${link(next.id)}"><small>SIGUIENTE ACTIVIDAD</small>${esc(next.title)} →</a>`:'<a href="#inicio">Volver a la vista general →</a>'}</nav>`;
+    return `${crumb('Módulo 1')}<header class="lesson-header"><span class="eyebrow">MÓDULO 1 · ${esc(l.label.toUpperCase())}</span><h1>${esc(l.title)}</h1><p>Adquisición y selección de vehículos eléctricos</p></header><div class="reading-meta"><span>▤ Manual del participante · Edición octubre 2026</span></div><article class="lesson-content">${l.html}</article>${id==='actividad'?activityWorkspace():''}${id==='unidad-14'?`<section class="resource-card"><span class="eyebrow">APLICA EL CONCEPTO</span><h2>Explora la energía disponible</h2><p>Ejercicio idealizado: capacidad utilizable × ventana de SoC. No incluye pérdidas de recarga ni factores de la ruta.</p><form id="energy-form"><label>Batería utilizable (kWh) <input name="battery" type="number" min="0.1" max="2000" step="any" value="55" required></label><br><label>SoC inicial (%) <input name="initial" type="number" min="0" max="100" step="any" value="90" required></label><br><label>SoC mínimo (%) <input name="minimum" type="number" min="0" max="100" step="any" value="20" required></label><br><button class="button secondary" type="submit">Calcular energía</button><p id="energy-result" role="status"></p></form></section>`:''}<div class="lesson-actions"><a class="button secondary" href="#inicio">← Volver al módulo</a><button class="button primary" id="mark-complete" aria-pressed="false">Marcar como completado ✓</button></div>${id==='cierre'?'<a class="button secondary full" href="#leccion/evaluacion-final" style="margin-top:18px">Ir a la evaluación final →</a>':''}<nav class="lesson-pagination" aria-label="Navegar entre actividades">${previous?`<a href="${link(previous.id)}"><small>ACTIVIDAD ANTERIOR</small>← ${esc(previous.title)}</a>`:'<span></span>'}${next?`<a href="${link(next.id)}"><small>SIGUIENTE ACTIVIDAD</small>${esc(next.title)} →</a>`:'<a href="#inicio">Volver a la vista general →</a>'}</nav>`;
   }
   function quizView(){
     return `${crumb('Autoevaluación')}<header class="lesson-header"><span class="eyebrow">MÓDULO 1 · AUTOEVALUACIÓN</span><h1>Comprueba tus conocimientos</h1><p>Seis preguntas de verdadero o falso, basadas en la actividad rápida del manual.</p></header><section class="lesson-content"><h2>Electrificado no siempre significa enchufable.</h2><p>Responde y revisa la explicación de cada afirmación. Puedes repetir esta práctica. El resultado se conserva solo en este navegador y no es una nota oficial del curso.</p><form id="quiz-form">${window.COURSE.questions.map((q,i)=>`<fieldset class="quiz-question"><legend>${i+1}. ${esc(q.q)}</legend><div class="quiz-options"><label><input type="radio" name="q${i}" value="true" required> Verdadero</label><label><input type="radio" name="q${i}" value="false" required> Falso</label></div><div class="quiz-feedback" id="feedback-${i}" hidden></div></fieldset>`).join('')}<div class="lesson-actions"><button type="submit" class="button primary">Revisar mis respuestas →</button><button type="button" class="button secondary" id="retry-quiz">Volver a intentar</button></div><div id="quiz-result" class="quiz-result" role="status" hidden></div></form></section><div class="lesson-actions"><a href="#leccion/cierre" class="button secondary">Ver mensajes clave →</a><a href="#inicio" class="text-link">Volver al curso</a></div>`;
@@ -90,7 +93,7 @@ window.startAcademy = () => {
     const r=route();if(r.startsWith('leccion/')){const id=r.split('/')[1];if(valid.has(id)){state.last=id;save();}main.innerHTML=lessonView(id);}else main.innerHTML=({inicio:overview,recursos:resources,autor:author,ecosistema:ecosystem}[r]||notFound)();
     document.querySelectorAll('.topnav a').forEach(a=>{const active=a.hash==='#'+r||(a.hash==='#inicio'&&r.startsWith('leccion/'));a.classList.toggle('active',active);if(active)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});
     const current=lessons.find(l=>r===('leccion/'+l.id));document.title=(current?current.title:r==='inicio'?'Electromovilidad Perú':({recursos:'Biblioteca',autor:'El docente',ecosistema:'Soluciones energéticas'}[r]||'Electromovilidad Perú'))+' · Energéticos Academia';
-    sidebar();updateProgress();bind();closeMenu();window.scrollTo({top:0,behavior:'instant'});
+    sidebar();updateProgress();bind();window.ACADEMY.mountAssessments?.();closeMenu();window.scrollTo({top:0,behavior:'instant'});
   }
   $('.skip').addEventListener('click',e=>{e.preventDefault();main.focus();main.scrollIntoView({block:'start'});});
   $('#search').addEventListener('input',filterLessons);$('.mobile-menu').addEventListener('click',()=>{const open=!$('.sidebar').classList.contains('open');$('.sidebar').classList.toggle('open',open);$('.scrim').hidden=!open;$('.mobile-menu').setAttribute('aria-expanded',String(open));});$('.scrim').addEventListener('click',closeMenu);document.addEventListener('keydown',e=>{if(e.key==='Escape')closeMenu();});window.addEventListener('hashchange',()=>{render();main.focus({preventScroll:true});});render();

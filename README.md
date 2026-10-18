@@ -21,12 +21,12 @@ El cobro es manual: el responsable verifica el pago antes de activar cada matrí
 ## Configuración del servicio
 
 1. Crear un proyecto Supabase dedicado a la academia. El titular debe completar cualquier contratación y aceptación de términos de la plataforma.
-2. Ejecutar `supabase/setup.sql` en el SQL Editor. Crea matrículas, progreso, políticas RLS y el depósito privado `course-private`.
+2. Ejecutar `supabase/setup.sql` y después `supabase/assessments.sql` en el SQL Editor. Crean matrículas, progreso, políticas RLS, el depósito privado `course-private`, el banco de preguntas privado y las funciones de calificación en servidor. El proyecto verificado es `Energeticos_Academia`, referencia `fgjxrbnehjwkzcousdtp`.
 3. En Authentication, habilitar correo y contraseña y **deshabilitar el registro público de usuarios**. Crear cuentas mediante invitación administrativa. No crear políticas que permitan a los estudiantes escribir en `course_enrollments`.
 4. Configurar Site URL y Redirect URLs con `https://energeticos2023.github.io/energeticos-academia/`. Configurar SMTP propio para el envío real de invitaciones y recuperación; el servicio de correo de prueba de Supabase tiene restricciones.
 5. En las Variables de GitHub Actions del repositorio, definir `SUPABASE_URL` y `SUPABASE_PUBLISHABLE_KEY`. Son valores públicos. **Nunca usar una clave secret ni service_role en variables que se integren en el navegador.**
 6. Cargar los materiales privados con `node scripts/upload-content.mjs`. La URL y la clave administrativa se solicitan por terminal; la clave no se muestra ni se guarda. También puede utilizarse `SUPABASE_SERVICE_ROLE_KEY` solo en el entorno temporal del proceso local.
-7. Ejecutar `tests/rls.integration.mjs` con las credenciales del proyecto en el entorno temporal. Verificar que usuarios anónimos, no matriculados, impagos, suspendidos y vencidos no pueden descargar; un alumno tampoco puede activar su propia matrícula ni consultar el progreso de otro.
+7. Aplicar el banco desde el archivo LOCAL `private-assessments/seed.sql`. No subir ese archivo a GitHub ni a Storage: contiene las claves de los exámenes. Ejecutar `tests/rls.integration.mjs` con las credenciales del proyecto en el entorno temporal. Verificar que usuarios anónimos, no matriculados, impagos, suspendidos y vencidos no pueden descargar ni acceder al examen; un alumno tampoco puede activar su propia matrícula, modificar una nota ni consultar resultados ajenos.
 8. Ejecutar nuevamente el workflow de GitHub Pages. Probar una invitación y el ingreso con una cuenta propia antes de matricular estudiantes reales.
 
 ## Matricular estudiantes
@@ -55,7 +55,18 @@ pnpm test
 
 El workflow solo publica `web/`. `src/auth.mjs` se compila localmente, sin cargar librerías de autenticación desde un CDN en el navegador.
 
-La generación inicial `scripts/prepare-content.py` utiliza la versión local hermana `energeticos-academia/dist`. Ejecutarla al actualizar el manual: produce el JSON privado, copia las imágenes y los documentos solo a `private-course/` y prepara la interfaz pública. Requiere Python. Después, compilar, verificar y cargar los materiales privados. En otra computadora se deben recuperar los documentos originales desde el archivo privado del autor; no desde GitHub.
+La generación inicial `scripts/prepare-content.py` utiliza la versión local hermana `energeticos-academia/dist`. Ejecutarla al actualizar el manual: produce el JSON privado, copia las imágenes y los documentos solo a `private-course/` y prepara la interfaz pública. Requiere Python. Después ejecutar `node scripts/build-assessments.mjs`, compilar, verificar y cargar los materiales privados. En otra computadora se deben recuperar los documentos originales y el banco privado desde el archivo del autor; no desde GitHub.
+
+## Evaluaciones del Módulo 1
+
+- Cinco autoevaluaciones, una por unidad, con tres preguntas y retroalimentación cada una: 15 preguntas formativas. El resultado se sincroniza como progreso personal.
+- Cinco evaluaciones de cierre, una por unidad, con cinco preguntas cada una: 25 preguntas calificadas en servidor.
+- Una evaluación integradora al final del módulo, con diez preguntas calificadas en servidor.
+- Cada envío guarda alumno, evaluación, respuestas, instantánea de las preguntas sin claves, nota, referencia de aprobación y fecha. La repetición de un mismo envío por fallo de red no crea un intento adicional.
+- Las respuestas correctas de los exámenes se almacenan en `academy_private.assessment_questions`, sin acceso directo para alumnos ni usuarios anónimos. El cliente recibe solo enunciados y opciones. Las notas son de solo lectura para el estudiante.
+- La referencia inicial es 70/100, tomada de la sugerencia del manual. No hay límite de intentos configurado por defecto. Ambos parámetros pueden ajustarse en `assessment_catalog`. Una nota de examen no sustituye la rúbrica del caso ni la nota ponderada global, y no genera certificados automáticamente.
+- El informe local `private-assessments/Banco_Evaluaciones_Modulo_1.html` permite al docente revisar todas las preguntas y soluciones. Al cambiar sustancialmente una evaluación, incrementar la versión del banco para conservar la trazabilidad de los intentos anteriores.
+- La evaluación final del curso completo se elaborará cuando estén disponibles los siguientes módulos; no se presenta la evaluación del Módulo 1 como evaluación de todo el programa.
 
 ## Pruebas y límites
 

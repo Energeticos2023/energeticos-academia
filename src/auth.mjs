@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { validateConfig, enrollmentIsActive, isPrivateMaterialPath } from './access.mjs';
+import { createAssessmentMount } from './assessments.mjs';
 
 const config = window.ACADEMY_CONFIG;
 const $ = s => document.querySelector(s);
@@ -78,6 +79,7 @@ async function openClassroom() {
           document.querySelectorAll('.local-note').forEach(el=>el.textContent=error?'No se pudo sincronizar. Se conserva una copia en este navegador.':'Progreso sincronizado con tu cuenta.');
         },900);
       }};
+    window.ACADEMY.mountAssessments=createAssessmentMount(client,course,()=>session.user.id);
     $('#public-view').hidden=true;$('#classroom').hidden=false;active=true;
     if(!/^#(?:inicio|recursos|autor|ecosistema|leccion\/[^/]+)$/.test(location.hash))history.replaceState(null,'',location.pathname+location.search+'#inicio');
     $('#student-email').textContent=session.user.email;

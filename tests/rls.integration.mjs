@@ -36,7 +36,23 @@ test('Autorización real de matrículas, almacenamiento y progreso',{skip:!url||
   await ok(await student.from('student_progress').upsert({user_id:ids[0],course_id:course,state:{completed:['proposito']}}));
   const visible=await ok(await other.from('student_progress').select('state').eq('user_id',ids[0]));assert.equal(visible.length,0);
   assert.ok((await other.from('student_progress').upsert({user_id:ids[0],course_id:course,state:{}})).error,'Un alumno no debe poder escribir en el progreso de otro');
+  // Requiere assessments.sql y el banco privado previamente cargados.
+  const assessment=await ok(await student.rpc('get_assessment',{requested_assessment:'m1-final-v1'}));
+  assert.equal(assessment.questions.length,10);
+  assert.ok(!JSON.stringify(assessment).includes('correct_index'),'La API de preguntas no debe divulgar claves');
+  assert.ok((await other.rpc('get_assessment',{requested_assessment:'m1-final-v1'})).error,'El examen no está disponible sin matrícula');
+  const submissionKey=randomUUID();
+  const submitted=assessment.questions.map(q=>({id:q.id,choice:0,score:100}));
+  const first=await ok(await student.rpc('submit_assessment',{requested_assessment:assessment.id,submitted_answers:submitted,request_key:submissionKey}));
+  assert.equal(first.score,first.correct_count*100/first.question_count);
+  const again=await ok(await student.rpc('submit_assessment',{requested_assessment:assessment.id,submitted_answers:submitted,request_key:submissionKey}));
+  assert.equal(first.attempt_id,again.attempt_id,'Un reintento de red no debe consumir otro intento');
+  assert.ok((await student.from('assessment_attempts').update({score:100,passed:true}).eq('id',first.attempt_id)).error,'La nota no debe poder modificarse desde el alumno');
+  const otherAttempts=await ok(await other.from('assessment_attempts').select('id').eq('user_id',ids[0]));assert.equal(otherAttempts.length,0);
+  const duplicates=assessment.questions.map(q=>({id:assessment.questions[0].id,choice:0}));
+  assert.ok((await student.rpc('submit_assessment',{requested_assessment:assessment.id,submitted_answers:duplicates,request_key:randomUUID()})).error,'No deben aceptarse preguntas duplicadas');
   await set({payment_confirmed:true,status:'suspended'});await deny(student);
+  assert.ok((await student.rpc('get_assessment',{requested_assessment:assessment.id})).error,'La suspensión también bloquea evaluaciones');
   await set({payment_confirmed:true,valid_until:new Date(Date.now()-60000).toISOString()});await deny(student);
  }finally{
   await admin.storage.from(bucket).remove([object]);
