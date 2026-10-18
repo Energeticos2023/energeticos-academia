@@ -1,11 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
 import { validateConfig, enrollmentIsActive, isPrivateMaterialPath } from './access.mjs';
 import { createAssessmentMount } from './assessments.mjs';
-import './enrollment.mjs';
+import {initEnrollment} from './enrollment.mjs';
+import {createAdminPanel} from './admin.mjs';
 
 const config = window.ACADEMY_CONFIG;
 const $ = s => document.querySelector(s);
-let client, session, heartbeat, active=false, loading=false, saveTimer;
+let client, session, heartbeat, admin, active=false, loading=false, saveTimer;
 const objectUrls = new Map();
 const COURSE_ID = config.courseId;
 const recoveryType = new URLSearchParams(location.hash.slice(1)).get('type');
@@ -14,6 +15,7 @@ const setBusy = (value) => document.querySelectorAll('.auth-form button').forEac
 const redirectTo = () => new URL('.', location.href).href;
 
 function showPublic(message) {
+  admin?.clear();
   active=false; $('#classroom').hidden=true; $('#public-view').hidden=false;
   if (heartbeat) clearInterval(heartbeat);
   objectUrls.forEach(url => URL.revokeObjectURL(url)); objectUrls.clear();
@@ -65,6 +67,10 @@ async function openClassroom() {
   if(loading||active)return;loading=true;setBusy(true);status('Verificando tu matrícula…');
   try {
     const {data,error}=await client.auth.getSession();if(error||!data.session)throw new Error('Inicia sesión con tu correo y contraseña.');session=data.session;
+    const {data:isAdmin,error:adminError}=await client.rpc('is_academy_admin');
+    if(adminError)throw new Error('No se pudo verificar el permiso de tu cuenta. Intenta nuevamente.');
+    if(isAdmin){active=false;if(heartbeat)clearInterval(heartbeat);await admin.open(session.user.email);return;}
+    if(location.hash==='#administracion')throw new Error('Esta cuenta no tiene permiso de administrador.');
     await assertEnrollment();
     if(window.academyStarted && window.academyUserId!==session.user.id){location.replace(redirectTo());return;}
     const course = sanitizeLessons(JSON.parse(await (await downloadPrivate(COURSE_ID+'/module-1/course-data.json')).text()));
@@ -107,6 +113,10 @@ document.addEventListener('click',async e=>{
 },true);
 
 $('#go-reset').addEventListener('click',()=>{$('#login-form').hidden=true;$('#reset-form').hidden=false;status('Indica el correo asociado a tu matrícula.');});
+$('#admin-link').addEventListener('click',async()=>{
+  if(session)await openClassroom();
+  else{status('Ingresa con la cuenta del administrador para revisar solicitudes.');$('#login-section').scrollIntoView({block:'center'});}
+});
 $('#back-login').addEventListener('click',()=>{$('#reset-form').hidden=true;$('#login-form').hidden=false;status('');});
 $('#logout').addEventListener('click',async()=>{
   const localKey='energeticos-academia-m1-v1:'+session?.user?.id;
@@ -148,17 +158,21 @@ $('#new-password-form').addEventListener('submit',async e=>{
 try {
   if(validateConfig(config)) {
     client=createClient(config.supabaseUrl,config.supabasePublishableKey,{auth:{persistSession:true,storage:sessionStorage,detectSessionInUrl:true,autoRefreshToken:true,flowType:'implicit'}});
+    admin=createAdminPanel(client);
+    initEnrollment(client);
     client.auth.onAuthStateChange((event,currentSession)=>{
       if(currentSession)session=currentSession;
       if(event==='PASSWORD_RECOVERY')showPassword();
-      if(event==='SIGNED_OUT'&&active)showPublic('Tu sesión ha finalizado.');
+      if(event==='SIGNED_OUT'){session=null;showPublic('Tu sesión ha finalizado.');}
     });
     const {data,error}=await client.auth.getSession();
     if(error)status('El enlace de acceso no es válido o ha vencido. Solicita uno nuevo.','error');
     else if(data.session && ['recovery','invite'].includes(recoveryType))showPassword();
     else if(data.session)await openClassroom();
   } else {
+    initEnrollment(null);
     status('Inscripciones por apertura. El acceso de alumnos se habilitará próximamente.');
     $('#login-form button[type="submit"]').disabled=true;
   }
 }catch {status('El acceso de alumnos está en configuración. Contacta al docente.','error');}
+if(location.hash==='#administracion'&&!session){status('Ingresa con la cuenta del administrador para revisar solicitudes.');$('#login-section').scrollIntoView({block:'center'});}

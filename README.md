@@ -82,10 +82,14 @@ Las pruebas unitarias cubren el cierre del acceso sin configuración, el rechazo
 - [Control de acceso al almacenamiento](https://supabase.com/docs/guides/storage/security/access-control)
 - [GitHub Pages](https://docs.github.com/en/pages)
 
-## Solicitudes de inscripción y currícula pública
+## Solicitudes de inscripción y panel privado
 
-La portada incluye enlaces a `#inscripcion`, `#programa` y `#como-acceder`. La solicitud prepara un correo al docente con nombre, correo de matrícula y empresa opcional. El visitante revisa y envía el mensaje desde su aplicación de correo; no se guarda una solicitud en Supabase ni se envía automáticamente. La página ofrece el correo directo como alternativa. No se solicita contraseña ni se cobra desde el formulario.
+El formulario guarda nombre, correo, institución opcional y constancia de autorización mediante `request_registration`. Una respuesta correcta confirma persistencia en Supabase; no depende de abrir una aplicación de correo. El mismo correo y curso no se duplican ni permiten sobrescribir la solicitud original desde el formulario público. Las solicitudes anteriores preparadas por correo no se importan automáticamente.
 
-Flujo del docente: responder con precio, condiciones, alcance y vigencia; verificar el pago; ejecutar `scripts/manage-students.mjs invitar` o activar una cuenta existente. El alumno define su contraseña mediante invitación o recuperación. Antes de usarlo con estudiantes reales, completar la configuración de Auth/SMTP y probar una invitación real con una cuenta propia. Las credenciales administrativas nunca deben publicarse en GitHub ni compartirse con alumnos.
+Aplicar `supabase/registration.sql` después del esquema base. Los visitantes solo ejecutan la función de registro; no pueden leer solicitudes ni insertar directamente. Los estudiantes tampoco ven datos ajenos. Solo las cuentas incluidas en `academy_private.administrators` pueden ver y cambiar el estado de seguimiento. No hay una clave administrativa en el navegador.
 
-La currícula pública detalla las cinco unidades, el caso aplicado y las evaluaciones del Módulo 1. Los siguientes módulos están señalados como en preparación hasta incorporar el temario aprobado del autor. No se promete una fecha, precio o contenido de módulos todavía no aportados.
+Acceso del titular: abrir `https://energeticos2023.github.io/energeticos-academia/#administracion` e ingresar con su cuenta del aula. La cuenta de Supabase Dashboard/GitHub es distinta de la cuenta de Supabase Auth del aula. La migración vincula `jose.zena.p@uni.pe` únicamente si ya existe y tiene el correo confirmado. Después de aceptar una invitación pendiente, volver a ejecutar solo el `insert into academy_private.administrators ... select ...` del final del archivo para vincular el ID verificado. No conceder acceso basándose en datos editables de un perfil o en un correo escrito en el formulario.
+
+El panel permite filtrar, paginar, actualizar y marcar solicitudes como pendientes, contactadas o cerradas. Estos estados no confirman pagos ni activan matrículas. El cobro, la invitación de estudiantes y la activación continúan en el flujo administrativo documentado arriba.
+
+La currícula pública detalla las cinco unidades del Módulo 1. Los siguientes módulos figuran en preparación hasta recibir el temario aprobado del autor.

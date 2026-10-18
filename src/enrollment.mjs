@@ -1,37 +1,25 @@
-// Prepara una solicitud en el correo del visitante; no envía ni almacena datos.
-const form = document.querySelector('#enrollment-form');
-form?.addEventListener('submit', event => {
+export function initEnrollment(client) {
+ const form=document.querySelector('#enrollment-form');
+ const message=document.querySelector('#enrollment-message');
+ let busy=false;
+ form.addEventListener('submit',async event=>{
   event.preventDefault();
-  if (!form.reportValidity()) return;
-  const clean = value => value.trim().replace(/[\r\n]+/g, ' ');
-  const name = clean(form.elements.name.value);
-  const email = clean(form.elements.email.value);
-  if (!name) {
-    form.elements.name.setCustomValidity('Escribe tus nombres y apellidos.');
-    form.elements.name.reportValidity();
-    return;
-  }
-  const organization = clean(form.elements.organization.value);
-  const subject = 'Solicitud de inscripción · Gestión de Flotas Eléctricas – Perú';
-  const body = [
-    'Estimado Ing. José Rafael Zeña Peche:',
-    '',
-    'Deseo información para inscribirme en el curso Gestión de Flotas Eléctricas y Operaciones de Electromovilidad – Perú.',
-    '',
-    `Nombres y apellidos: ${name}`,
-    `Correo para mi matrícula: ${email}`,
-    ...(organization ? [`Empresa o institución: ${organization}`] : []),
-    '',
-    'Por favor, indíqueme la inversión, forma de pago, currícula completa, módulos incluidos, disponibilidad y vigencia del acceso.',
-    '',
-    'Entiendo que la matrícula se activa después de verificar el pago y que recibiré una invitación para definir mi propia contraseña.'
-  ].join('\r\n');
-  document.querySelector('#enrollment-email-link').href =
-    `mailto:jose.zena.p@uni.pe?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-  document.querySelector('#enrollment-result').hidden = false;
-});
-form?.elements.name.addEventListener('input', () => form.elements.name.setCustomValidity(''));
-form?.addEventListener('input', () => {
-  document.querySelector('#enrollment-result').hidden = true;
-  document.querySelector('#enrollment-email-link').removeAttribute('href');
-});
+  if(busy||!form.reportValidity())return;
+  if(form.elements.website.value)return;
+  if(!client){message.textContent='No se pudo conectar. Intenta más tarde o escribe a jose.zena.p@uni.pe.';return;}
+  busy=true;form.querySelector('button').disabled=true;
+  message.textContent='Guardando tu solicitud…';message.dataset.type='info';
+  try{
+   const {data,error}=await client.rpc('request_registration',{
+    p_name:form.elements.name.value.trim(),p_email:form.elements.email.value.trim(),
+    p_organization:form.elements.organization.value.trim(),p_consent:form.elements.consent.checked
+   });
+   if(error||data?.received!==true)throw new Error();
+   message.textContent='Solicitud registrada. El docente podrá revisarla y contactarte al correo indicado para confirmar las condiciones de matrícula. Esto todavía no activa tu acceso al curso.';
+   message.dataset.type='success';form.reset();
+  }catch{
+   message.textContent='No pudimos confirmar el registro. Intenta nuevamente; no se duplicará tu solicitud si usas el mismo correo. También puedes escribir a jose.zena.p@uni.pe.';
+   message.dataset.type='error';
+  }finally{busy=false;form.querySelector('button').disabled=false;}
+ });
+}
