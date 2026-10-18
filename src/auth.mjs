@@ -79,6 +79,7 @@ async function openClassroom() {
         },900);
       }};
     $('#public-view').hidden=true;$('#classroom').hidden=false;active=true;
+    if(!/^#(?:inicio|recursos|autor|ecosistema|leccion\/[^/]+)$/.test(location.hash))history.replaceState(null,'',location.pathname+location.search+'#inicio');
     $('#student-email').textContent=session.user.email;
     if(!window.academyStarted) {window.academyStarted=true;window.academyUserId=session.user.id;window.startAcademy();}
     $('#login-form').reset();
