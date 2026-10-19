@@ -1,1 +1,27 @@
 .assessment-panel{margin-top:25px;padding:27px;background:#fff;border:1px solid var(--line);border-radius:10px}.assessment-panel>h2{font-size:21px;margin:12px 0}.assessment-panel>p{font-size:12px;line-height:1.8}.assessment-final{border-top:3px solid var(--teal)}.assessment-question{border:0;border-bottom:1px solid var(--line);padding:20px 0;margin:0}.assessment-question legend{font-size:13px;font-weight:700;line-height:1.8;padding-top:18px}.assessment-question label{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;margin:7px 0;border:1px solid var(--line);border-radius:6px;font-size:12px;cursor:pointer;line-height:1.7}.assessment-question input{margin-top:4px;flex-shrink:0}.assessment-question label:has(input:checked){background:#eef7f5;border-color:#77b2aa}.self-feedback{padding:12px 15px;border-radius:6px;font-size:12px;line-height:1.8}.self-feedback.correct{background:#ecf7f0;color:#256d50}.self-feedback.incorrect{background:#fff2e9;color:#94552e}.assessment-result{padding:17px;background:#edf7f4;border-radius:7px;color:#256d60;font-size:13px;line-height:1.8;margin-top:20px}.assessment-meta,.assessment-history{font-size:11px;line-height:1.8}.submit-official{margin-top:20px}.assessment-panel .official-status{font-size:12px;line-height:1.8}.assessment-final>.eyebrow{color:var(--teal)}@media(max-width:800px){.assessment-panel{padding:20px 16px}.assessment-panel>h2{font-size:19px}.assessment-question label{font-size:11px;padding:10px}.assessment-question legend{font-size:12px}}
+/* Campus v2: examen con tiempo, tablas de lecciones y avisos */
+.exam-bar{position:sticky;top:0;z-index:3;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 16px;margin:6px 0 10px;background:var(--navy);color:#fff;border-radius:8px;font-size:12px}
+.exam-clock{font-size:20px;font-variant-numeric:tabular-nums;letter-spacing:1px}
+.exam-clock.warning{color:#ffb36b}
+.exam-summary{margin:8px 0 16px}.exam-summary ul{padding-left:20px}
+.table-wrap{overflow-x:auto;margin:20px 0;border:1px solid var(--line);border-radius:7px}
+.lesson-content table th[scope="row"]{background:#f6fafa;white-space:normal;min-width:120px}
+.lesson-content .concept-table td,.lesson-content .concept-table th{vertical-align:top}
+.lesson-content .callout.warning{border-left-color:#c8663a;background:#fff4ec;color:#8a4a2b}
+.lesson-content .lesson-objective{padding:12px 15px;background:#eef3f8;border-radius:6px;color:#2e4d66;font-size:12px}
+.lesson-content a{color:var(--teal);overflow-wrap:anywhere}
+.lesson-content .resource-list li{padding:5px 0}
+.version-banner{background:#fff4e5;color:#7a4a12;border-bottom:1px solid #f1d2a8;padding:9px 30px;font-size:12px;line-height:1.6}
+.file-link[data-private-download]{width:100%;text-align:left;font:inherit;font-size:10px;font-weight:600;cursor:pointer;background:transparent;border:0;border-bottom:1px solid #eef2f5;color:inherit}
+.file-link[aria-busy="true"]{opacity:.6;cursor:progress}
+.file-icon.pdf{background:#fbe9e6;color:#b8402e;font-size:8px}
+.admin-card{margin:22px 0;padding:24px;background:#fff;border:1px solid var(--line);border-radius:10px}
+.admin-card h2{font-size:19px;margin:10px 0}.admin-card td .button{margin:3px 6px 3px 0}
+.admin-note{font-size:11px;color:var(--muted)}
+@media(max-width:800px){.version-banner{padding:9px 17px}.exam-clock{font-size:17px}.admin-card{padding:18px 14px}}
+@media(max-width:640px){.lesson-content .concept-table{min-width:0}.lesson-content .concept-table thead{display:none}.lesson-content .concept-table tr{display:block;border-top:1px solid var(--line);padding:10px 0}.lesson-content .concept-table th[scope="row"],.lesson-content .concept-table td{display:block;border:0;padding:4px 13px}.lesson-content .concept-table th[scope="row"]{background:transparent;color:var(--ink);font-size:12px}.lesson-content .concept-table td:last-child{color:#2e6f6a;font-style:italic}}
+.enroll-form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:14px 0;padding:16px;background:#f6f9fb;border-radius:8px}
+.enroll-form label{display:flex;flex-direction:column;gap:6px;font-size:11px;font-weight:700;color:var(--ink)}
+.enroll-form input{padding:9px 10px;border:1px solid var(--line);border-radius:6px;font:inherit;font-weight:400}
+.enroll-actions{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:10px}.enroll-form .admin-note{grid-column:1/-1;margin:0}
+@media(max-width:800px){.enroll-form{grid-template-columns:1fr}}

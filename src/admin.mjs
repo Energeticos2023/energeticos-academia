@@ -1,52 +1,136 @@
 const labels={pending:'Pendiente',contacted:'Contactado',closed:'Cerrado'};
-export function createAdminPanel(client) {
+const stateLabels={testing:'En revisión (solo docente)',approved:'Publicada para alumnos',archived:'Archivada'};
+const date=value=>value?new Intl.DateTimeFormat('es-PE',{dateStyle:'medium',timeStyle:'short',timeZone:'America/Lima'}).format(new Date(value)):'—';
+const cell=(text)=>{const td=document.createElement('td');td.textContent=text;return td;};
+function table(headers){
+ const wrap=document.createElement('div');wrap.className='table-scroll';
+ const t=document.createElement('table');const head=document.createElement('thead');const row=document.createElement('tr');
+ for(const h of headers){const th=document.createElement('th');th.scope='col';th.textContent=h;row.append(th);}
+ head.append(row);const body=document.createElement('tbody');t.append(head,body);wrap.append(t);
+ return {wrap,body};
+}
+
+export function createAdminPanel(client,options={}) {
  const panel=document.querySelector('#admin-view');
- const previewLoad=panel.querySelector('#preview-load');
- const previewSelect=panel.querySelector('#preview-lesson');
- const previewControls=panel.querySelector('#preview-controls');
- const previewBody=panel.querySelector('#preview-body');
- const previewStatus=panel.querySelector('#preview-status');
- let previewLessons=[];
- function showPreviewLesson(){
-   const lesson=previewLessons.find(l=>l.id===previewSelect.value);
-   if(!lesson)return;
-   previewBody.replaceChildren();
-   const title=document.createElement('h3');title.textContent=lesson.title;
-   const description=document.createElement('p');description.textContent='Vista docente sin calificaciones ni progreso.';
-   const rendered=document.createElement('div');rendered.className='admin-preview-content';
-   // Material del paquete controlado por administración; sanitizar toda etiqueta y atributo no seguro.
-   const raw=new DOMParser().parseFromString(String(lesson.html||''),'text/html');
-   const safeTags=new Set(['H2','H3','P','STRONG','EM','BR','UL','OL','LI','ASIDE']);
-   for(const element of [...raw.body.querySelectorAll('*')]){
-     if(!safeTags.has(element.tagName)){element.replaceWith(document.createTextNode(element.textContent||''));continue;}
-     for(const attr of [...element.attributes])element.removeAttribute(attr.name);
+ const courseId=options.courseId||'flotas-electricas-peru';
+
+ // Acceso del docente al aula como alumno
+ panel.querySelector('#enter-classroom')?.addEventListener('click',()=>options.enterClassroom?.());
+
+ // Versiones del contenido
+ const packageList=panel.querySelector('#package-list');
+ const packageStatus=panel.querySelector('#package-status');
+ async function loadPackages(){
+  if(!packageList)return;
+  try{
+   const {data,error}=await client.rpc('list_module_packages');if(error)throw error;
+   packageList.replaceChildren();
+   const visible=(data||[]).filter(p=>p.publication_state!=='archived');
+   const archived=(data||[]).length-visible.length;
+   if(!visible.length){packageList.textContent='No hay versiones cargadas.';return;}
+   const {wrap,body}=table(['Versión','Estado','Actividades','Actualizada','Acciones']);
+   for(const pkg of visible){
+    const tr=document.createElement('tr');
+    tr.append(cell(`${pkg.version_label} · ${pkg.package_id}`),cell(stateLabels[pkg.publication_state]||pkg.publication_state),cell(String(pkg.lessons)),cell(date(pkg.updated_at)));
+    const actions=document.createElement('td');
+    if(pkg.publication_state==='testing'){
+     const view=document.createElement('button');view.type='button';view.className='button secondary';view.textContent='Revisar como alumno';
+     view.addEventListener('click',()=>options.enterClassroom?.());
+     const publish=document.createElement('button');publish.type='button';publish.className='button primary';publish.textContent='Publicar para los alumnos';
+     publish.addEventListener('click',async()=>{
+      const ok=confirm(`¿Publicar la versión ${pkg.version_label}? Todos los alumnos con matrícula activa verán este contenido de inmediato y la versión publicada anterior quedará archivada.`);
+      if(!ok)return;
+      publish.disabled=true;packageStatus.textContent='Publicando…';
+      try{const {error}=await client.rpc('publish_module_package',{requested_package:pkg.package_id});if(error)throw error;packageStatus.textContent=`Versión ${pkg.version_label} publicada. Los alumnos la verán al ingresar.`;await loadPackages();}
+      catch(e){packageStatus.textContent='No se pudo publicar: '+(e.message||'revisa tu sesión.');publish.disabled=false;}
+     });
+     actions.append(view,publish);
+    }else actions.textContent='—';
+    tr.append(actions);body.append(tr);
    }
-   rendered.innerHTML=raw.body.innerHTML;
-   previewBody.append(title,description,rendered);
+   packageList.append(wrap);
+   if(archived){const p=document.createElement('p');p.className='admin-note';p.textContent=`${archived} versión(es) anterior(es) archivada(s).`;packageList.append(p);}
+  }catch{packageList.textContent='No se pudieron cargar las versiones.';}
  }
- previewSelect?.addEventListener('change',showPreviewLesson);
- previewLoad?.addEventListener('click',async()=>{
-   if(!client){previewStatus.textContent='Sin conexión al campus.';return;}
-   previewLoad.disabled=true;previewStatus.textContent='Verificando el permiso administrativo…';
-   try{
-     const {data:allowed,error:permission}=await client.rpc('is_academy_admin');
-     if(permission||!allowed)throw new Error('Solo el administrador autorizado puede abrir la vista previa.');
-     const {data,error}=await client.rpc('get_module_package',{requested_package:'m1-pedagogico-v2-2-test'});
-     if(error||!Array.isArray(data?.lessons))throw new Error('No se pudo leer el paquete del módulo.');
-     previewLessons=data.lessons;
-     previewSelect.replaceChildren();
-     for(const lesson of previewLessons){const o=document.createElement('option');o.value=lesson.id;o.textContent=lesson.title;previewSelect.add(o);}
-     previewSelect.disabled=false;previewControls.hidden=false;showPreviewLesson();
-     previewStatus.textContent=previewLessons.length+' actividades privadas cargadas. Modo docente de solo lectura.';
-   }catch(e){previewStatus.textContent=e.message||'Vista previa no disponible.';}
-   finally{previewLoad.disabled=false;}
+
+ // Seguimiento de alumnos
+ const studentList=panel.querySelector('#student-list');
+ const studentsStatus=panel.querySelector('#students-status');
+ async function loadStudents(){
+  if(!studentList)return;
+  studentsStatus.textContent='Cargando seguimiento…';
+  try{
+   const {data,error}=await client.rpc('admin_course_overview',{requested_course:courseId});if(error)throw error;
+   studentList.replaceChildren();
+   const students=(data||[]).filter(s=>s.access_kind==='student');
+   const {wrap,body}=table(['Correo','Tipo','Estado','Vigencia','Actividades completadas','Mejor nota del examen','Intentos','Último ingreso','Acción']);
+   for(const s of data||[]){
+    const best=s.best_scores&&s.best_scores['m1-evaluacion-v2-1'];
+    const tr=document.createElement('tr');
+    tr.append(cell(s.email),cell(s.access_kind==='staff'?'Docente (pruebas)':'Alumno'),
+     cell(s.status==='active'&&s.payment_confirmed?'Activa':'Suspendida'),cell(s.valid_until?date(s.valid_until):'Sin vencimiento'),
+     cell(String(s.completed)),cell(best==null?'—':`${Number(best)}/100`),cell(String(s.attempts)),cell(date(s.last_sign_in_at)));
+    const actions=document.createElement('td');
+    if(s.access_kind==='student'){
+     const activeNow=s.status==='active'&&s.payment_confirmed;
+     const toggle=document.createElement('button');toggle.type='button';toggle.className='button secondary';toggle.textContent=activeNow?'Suspender':'Reactivar';
+     toggle.addEventListener('click',async()=>{
+      let note='';
+      if(!activeNow){note=prompt('Referencia del pago verificado para reactivar:')||'';if(note.trim().length<3)return;}
+      else if(!confirm(`¿Suspender el acceso de ${s.email}? Su progreso y notas se conservan.`))return;
+      toggle.disabled=true;
+      try{await setEnrollment(s.email,activeNow?'suspended':'active',s.valid_until&&Date.parse(s.valid_until)>Date.now()?s.valid_until:null,note);await loadStudents();}
+      catch(e){studentsStatus.textContent=e.message;toggle.disabled=false;}
+     });
+     actions.append(toggle);
+    }else actions.textContent='—';
+    tr.append(actions);
+    body.append(tr);
+   }
+   studentList.append(wrap);
+   studentsStatus.textContent=students.length?`${students.length} alumno(s) matriculado(s).`:'Aún no hay alumnos matriculados. Tu cuenta docente aparece para que verifiques el registro de tus pruebas.';
+  }catch{studentsStatus.textContent='No se pudo cargar el seguimiento.';}
+ }
+ panel.querySelector('#students-refresh')?.addEventListener('click',()=>loadStudents());
+
+ // Matrícula: invitación por correo (función de servidor) y activación con referencia de pago
+ const enrollForm=panel.querySelector('#enroll-form');
+ const enrollStatus=panel.querySelector('#enroll-status');
+ async function setEnrollment(email,status,until,payment){
+  const {error}=await client.rpc('admin_set_enrollment',{p_email:email,p_status:status,p_valid_until:until,p_payment_note:payment});
+  if(error)throw new Error(error.message);
+ }
+ enrollForm?.addEventListener('submit',async event=>{
+  event.preventDefault();
+  const action=event.submitter?.value||'invite';
+  const email=enrollForm.elements.email.value.trim().toLowerCase();
+  const payment=enrollForm.elements.payment.value.trim();
+  const until=enrollForm.elements.until.value?new Date(enrollForm.elements.until.value+'T23:59:59-05:00').toISOString():null;
+  if(payment.length<3){enrollStatus.textContent='Indica la referencia del pago verificado antes de activar.';return;}
+  if(!confirm(`¿Confirmas que verificaste el pago de ${email} y deseas ${action==='invite'?'enviarle la invitación y activar':'activar'} su matrícula?`))return;
+  enrollForm.querySelectorAll('button').forEach(b=>b.disabled=true);
+  try{
+   if(action==='invite'){
+    enrollStatus.textContent='Enviando invitación…';
+    const {data,error}=await client.functions.invoke('admin-invite',{body:{email}});
+    if(error){
+     let detail='';try{detail=(await error.context?.json())?.error||'';}catch{}
+     if(!/ya existe/.test(detail))throw new Error(detail||'No se pudo enviar la invitación.');
+    }
+   }
+   enrollStatus.textContent='Activando matrícula…';
+   await setEnrollment(email,'active',until,payment);
+   enrollStatus.textContent=action==='invite'?`Invitación enviada y matrícula activa para ${email}. El alumno debe abrir el correo y crear su contraseña.`:`Matrícula activa para ${email}.`;
+   enrollForm.reset();await loadStudents();
+  }catch(e){enrollStatus.textContent=e.message;}
+  finally{enrollForm.querySelectorAll('button').forEach(b=>b.disabled=false);}
  });
 
- const status=panel.querySelector('[role="status"]');
+ // Solicitudes de inscripción
+ const status=panel.querySelector('#requests-status')||panel.querySelector('[role="status"]');
  const list=panel.querySelector('#registration-list');
  let page=0,rows=[],loading=false;
  const size=30;
- const date=value=>new Intl.DateTimeFormat('es-PE',{dateStyle:'medium',timeStyle:'short',timeZone:'America/Lima'}).format(new Date(value));
  function render(){
   list.replaceChildren();
   if(!rows.length){const p=document.createElement('p');p.textContent='No hay solicitudes con este filtro.';list.append(p);return;}
@@ -88,6 +172,13 @@ export function createAdminPanel(client) {
  panel.querySelector('#registration-filter').addEventListener('change',()=>{page=0;load();});
  panel.querySelector('#admin-prev').addEventListener('click',()=>{if(page>0){page--;load();}});
  panel.querySelector('#admin-next').addEventListener('click',()=>{page++;load();});
- panel.querySelector('#admin-logout').addEventListener('click',async()=>{try{await client.auth.signOut();}finally{location.replace(new URL('.',location.href).href);}});
- return {async open(email){document.querySelector('#public-view').hidden=true;document.querySelector('#classroom').hidden=true;panel.hidden=false;panel.querySelector('#admin-email').textContent=email;await load();},clear(){rows=[];list.replaceChildren();panel.hidden=true;}};
+ panel.querySelector('#admin-logout').addEventListener('click',async()=>{try{sessionStorage.removeItem('energeticos-academia-mode');}catch{}try{await client.auth.signOut();}finally{location.replace(new URL('.',location.href).href);}});
+ return {
+  async open(email){
+   document.querySelector('#public-view').hidden=true;document.querySelector('#classroom').hidden=true;panel.hidden=false;
+   panel.querySelector('#admin-email').textContent=email;
+   await Promise.all([load(),loadPackages(),loadStudents()]);
+  },
+  clear(){rows=[];list.replaceChildren();panel.hidden=true;}
+ };
 }

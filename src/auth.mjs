@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { validateConfig, enrollmentIsActive, isPrivateMaterialPath } from './access.mjs';
+import { validateConfig, enrollmentIsActive, isPrivateMaterialPath, safeExternalUrl } from './access.mjs';
 import { createAssessmentMount } from './assessments.mjs';
 import {initEnrollment} from './enrollment.mjs';
 import {createAdminPanel} from './admin.mjs';
@@ -13,6 +13,10 @@ const recoveryType = new URLSearchParams(location.hash.slice(1)).get('type');
 const status = (message, type='info') => { $('#auth-status').textContent=message; $('#auth-status').dataset.type=type; };
 const setBusy = (value) => document.querySelectorAll('.auth-form button').forEach(b => b.disabled=value);
 const redirectTo = () => new URL('.', location.href).href;
+// El administrador puede alternar entre el panel y el aula; la preferencia vive solo en esta pestaña.
+const MODE_KEY = 'energeticos-academia-mode';
+const getMode = () => { try { return sessionStorage.getItem(MODE_KEY); } catch { return null; } };
+const setMode = value => { try { value ? sessionStorage.setItem(MODE_KEY, value) : sessionStorage.removeItem(MODE_KEY); } catch {} };
 
 function showPublic(message) {
   admin?.clear();
@@ -50,18 +54,32 @@ async function hydrateImages() {
   }
 }
 function sanitizeLessons(course) {
-  if(!Array.isArray(course.lessons)||!Array.isArray(course.questions))throw new Error('El contenido del curso no tiene un formato válido.');
-  const allowed=new Set(['P','H2','H3','UL','OL','LI','ASIDE','DIV','TABLE','THEAD','TBODY','TR','TH','TD','FIGURE','IMG','STRONG','EM','BR','SMALL']);
+  if(!Array.isArray(course.lessons))throw new Error('El contenido del curso no tiene un formato válido.');
+  if(!Array.isArray(course.questions))course.questions=[];
+  const allowed=new Set(['P','H2','H3','UL','OL','LI','ASIDE','DIV','TABLE','THEAD','TBODY','TR','TH','TD','FIGURE','IMG','STRONG','EM','BR','SMALL','A']);
   for(const lesson of course.lessons) {
-    const doc=new DOMParser().parseFromString(lesson.html,'text/html');
-    for(const el of doc.body.querySelectorAll('*')) {
+    const doc=new DOMParser().parseFromString(String(lesson.html||''),'text/html');
+    for(const el of [...doc.body.querySelectorAll('*')]) {
+      if(!el.isConnected)continue;
       if(!allowed.has(el.tagName)){el.remove();continue;}
+      const href=el.tagName==='A'?safeExternalUrl(el.getAttribute('href')):null;
       for(const a of [...el.attributes])if(!['class','alt','loading','scope','data-private-path'].includes(a.name))el.removeAttribute(a.name);
+      if(el.tagName==='A'){
+        // Solo enlaces externos HTTPS a fuentes publicadas por sus editores.
+        if(!href){el.replaceWith(doc.createTextNode(el.textContent||''));continue;}
+        el.setAttribute('href',href);el.setAttribute('target','_blank');el.setAttribute('rel','noopener noreferrer');
+      }
       if(el.tagName==='IMG'&&!isPrivateMaterialPath(el.dataset.privatePath,COURSE_ID))el.remove();
     }
     lesson.html=doc.body.innerHTML;
   }
   return course;
+}
+async function savePrivateFile(path,filename) {
+  const blob=await downloadPrivate(path);
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=filename;document.body.append(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),2000);
 }
 async function openClassroom() {
   if(loading||active)return;loading=true;setBusy(true);status('Verificando tu matrícula…');
@@ -69,19 +87,25 @@ async function openClassroom() {
     const {data,error}=await client.auth.getSession();if(error||!data.session)throw new Error('Inicia sesión con tu correo y contraseña.');session=data.session;
     const {data:isAdmin,error:adminError}=await client.rpc('is_academy_admin');
     if(adminError)throw new Error('No se pudo verificar el permiso de tu cuenta. Intenta nuevamente.');
-    if(isAdmin){active=false;if(heartbeat)clearInterval(heartbeat);await admin.open(session.user.email);return;}
+    if(isAdmin&&(location.hash==='#administracion'||getMode()!=='student')){
+      setMode('admin');active=false;if(heartbeat)clearInterval(heartbeat);
+      $('#classroom').hidden=true;
+      if(location.hash!=='#administracion')history.replaceState(null,'',location.pathname+location.search+'#administracion');
+      await admin.open(session.user.email);return;
+    }
     if(location.hash==='#administracion')throw new Error('Esta cuenta no tiene permiso de administrador.');
     await assertEnrollment();
     if(window.academyStarted && window.academyUserId!==session.user.id){location.replace(redirectTo());return;}
-    // El paquete de pruebas se lee por RPC con autorización y RLS en servidor.
-    // Nunca se entrega el banco de evaluación ni material editable de docente.
-    const {data:testingPackage,error:packageError}=await client.rpc('get_module_package',{requested_package:'m1-pedagogico-v2-2-test'});
-    if(packageError||!testingPackage)throw new Error('El Módulo 1 de prueba todavía no está disponible para tu cuenta.');
-    const course=sanitizeLessons(testingPackage);
+    // El contenido vigente se resuelve en el servidor: versión aprobada para alumnos y,
+    // para el administrador, la versión en revisión. Nunca incluye claves de evaluación.
+    const {data:current,error:packageError}=await client.rpc('get_current_module',{requested_course:COURSE_ID});
+    if(packageError||!current?.course)throw new Error('El contenido del curso todavía no está publicado. Consulta al docente.');
+    const course=sanitizeLessons(current.course);
     const progress=await client.from('student_progress').select('state').eq('user_id',session.user.id).eq('course_id',COURSE_ID).maybeSingle();
     if(progress.error)throw new Error('No se pudo cargar tu progreso. Intenta nuevamente.');
     window.COURSE=course;
-    window.ACADEMY={userId:session.user.id,initialProgress:progress.data?.state||null,
+    window.ACADEMY={userId:session.user.id,initialProgress:progress.data?.state||null,isAdmin:Boolean(isAdmin),
+      packageInfo:{id:current.package_id,version:current.version_label,state:current.publication_state},
       queueSave(state) {
         clearTimeout(saveTimer);
         saveTimer=setTimeout(async()=>{
@@ -93,7 +117,10 @@ async function openClassroom() {
     window.ACADEMY.mountAssessments=createAssessmentMount(client,course,()=>session.user.id);
     $('#public-view').hidden=true;$('#classroom').hidden=false;active=true;
     if(!/^#(?:inicio|recursos|autor|ecosistema|leccion\/[^/]+)$/.test(location.hash))history.replaceState(null,'',location.pathname+location.search+'#inicio');
-    $('#student-email').textContent=session.user.email;
+    $('#student-email').textContent=session.user.email+(isAdmin?' · vista de alumno (docente)':'');
+    const back=$('#back-admin');if(back)back.hidden=!isAdmin;
+    const banner=$('#version-banner');
+    if(banner){banner.hidden=current.publication_state==='approved';banner.textContent=current.publication_state==='approved'?'':`Estás viendo la versión ${current.version_label} en revisión. Los alumnos todavía no la ven: publícala desde Administración cuando la apruebes.`;}
     if(!window.academyStarted) {window.academyStarted=true;window.academyUserId=session.user.id;window.startAcademy();}
     $('#login-form').reset();
     hydrateImages();
@@ -105,6 +132,16 @@ async function openClassroom() {
 }
 
 document.addEventListener('click',async e=>{
+  const download=e.target.closest('[data-private-download]');
+  if(download){
+    e.preventDefault();
+    if(!active)return;
+    const original=download.textContent;download.setAttribute('aria-busy','true');
+    try{await savePrivateFile(download.dataset.privateDownload,download.dataset.filename||'material.pdf');}
+    catch(error){alert(error.message||'No fue posible descargar el material.');}
+    finally{download.removeAttribute('aria-busy');download.textContent=original;}
+    return;
+  }
   const a=e.target.closest('a');if(!a)return;
   // Evitar descargas de archivos editables históricos; el PDF se habilitará
   // exclusivamente cuando esté cargado en Storage privado y autorizado.
@@ -120,10 +157,17 @@ $('#admin-link').addEventListener('click',async()=>{
   else{status('Ingresa con la cuenta del administrador para revisar solicitudes.');$('#login-section').scrollIntoView({block:'center'});}
 });
 $('#back-login').addEventListener('click',()=>{$('#reset-form').hidden=true;$('#login-form').hidden=false;status('');});
+$('#back-admin')?.addEventListener('click',async()=>{
+  setMode('admin');
+  if(heartbeat)clearInterval(heartbeat);
+  active=false;$('#classroom').hidden=true;
+  history.replaceState(null,'',location.pathname+location.search+'#administracion');
+  await admin.open(session.user.email);
+});
 $('#logout').addEventListener('click',async()=>{
   const localKey='energeticos-academia-m1-v1:'+session?.user?.id;
   if(saveTimer)clearTimeout(saveTimer);
-  try{await client.auth.signOut();}finally{localStorage.removeItem(localKey);location.replace(redirectTo());}
+  try{await client.auth.signOut();}finally{localStorage.removeItem(localKey);setMode(null);location.replace(redirectTo());}
 });
 $('#login-form').addEventListener('submit',async e=>{
   e.preventDefault();if(!client)return status('El acceso de alumnos se habilitará próximamente. Solicita información al docente.');
@@ -160,7 +204,15 @@ $('#new-password-form').addEventListener('submit',async e=>{
 try {
   if(validateConfig(config)) {
     client=createClient(config.supabaseUrl,config.supabasePublishableKey,{auth:{persistSession:true,storage:sessionStorage,detectSessionInUrl:true,autoRefreshToken:true,flowType:'implicit'}});
-    admin=createAdminPanel(client);
+    admin=createAdminPanel(client,{
+      courseId:COURSE_ID,
+      async enterClassroom(lesson){
+        setMode('student');admin.clear();
+        history.replaceState(null,'',location.pathname+location.search+(lesson?'#leccion/'+lesson:'#inicio'));
+        if(window.academyStarted){location.reload();return;}
+        await openClassroom();
+      }
+    });
     initEnrollment(client);
     client.auth.onAuthStateChange((event,currentSession)=>{
       if(currentSession)session=currentSession;

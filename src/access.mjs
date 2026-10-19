@@ -24,3 +24,9 @@ export function isPrivateMaterialPath(path, courseId) {
   return typeof path === 'string' && path.startsWith(courseId + '/') &&
     !path.includes('..') && !path.includes('\\') && !path.includes('//') && !/[?#\x00-\x1f]/.test(path);
 }
+
+// Enlaces de lecciones: solo HTTPS absoluto, sin credenciales embebidas.
+export function safeExternalUrl(value) {
+  try { const url = new URL(value); return url.protocol === 'https:' && !url.username && !url.password ? url.href : null; }
+  catch { return null; }
+}

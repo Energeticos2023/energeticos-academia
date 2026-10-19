@@ -93,3 +93,14 @@ Acceso del titular: abrir `https://energeticos2023.github.io/energeticos-academi
 El panel permite filtrar, paginar, actualizar y marcar solicitudes como pendientes, contactadas o cerradas. Estos estados no confirman pagos ni activan matrículas. El cobro, la invitación de estudiantes y la activación continúan en el flujo administrativo documentado arriba.
 
 La currícula pública detalla las cinco unidades del Módulo 1. Los siguientes módulos figuran en preparación hasta recibir el temario aprobado del autor.
+
+## Campus v2 (octubre 2026)
+
+Migración: `supabase/campus-v2.sql` (aplicada en producción por partes el 18/10/2026; probada con `tests/campus-v2.test.mjs`).
+
+- **Contenido por versiones.** Cada módulo es un paquete en `academy_private.module_packages` con estado `testing`, `approved` o `archived`. Los alumnos reciben solo la versión aprobada (`get_current_module`); el administrador y los revisores (`access_kind = 'staff'`) ven además la versión en revisión. El botón **Publicar para los alumnos** del panel (`publish_module_package`) aprueba la versión y archiva la anterior, con registro en `academy_private.audit_events`.
+- **Acceso del autor como alumno.** La cuenta administradora tiene una matrícula `staff`: no es una matrícula pagada ni cuenta para certificados. Desde el panel, **Entrar al aula como alumno** abre el aula y **Volver a administración** regresa.
+- **Evaluación del Módulo 1** (`m1-evaluacion-v2-1`): 20 preguntas sorteadas por capítulo (2 del 1.1 y 3 de cada uno del 1.2 al 1.7) de un banco privado de 50, 45 minutos, 3 intentos y 70/100. Iniciar consume un intento (`start_assessment`); el envío se califica en el servidor y admite preguntas sin responder. Un intento que vence sin envío cuenta como utilizado. Las claves nunca salen de `academy_private`.
+- **Matrículas desde el panel.** *Invitar y activar* usa la función de servidor `admin-invite` (ver `supabase/functions/admin-invite`) y `admin_set_enrollment`, que exige la referencia del pago verificado. También se puede suspender o reactivar.
+- **Requisito para invitar alumnos reales:** configurar un SMTP propio en Supabase (Authentication → Emails). Sin él, Supabase solo envía correos a los miembros del equipo del proyecto.
+- **Descargas.** Solo PDF del depósito privado `course-private`, con matrícula vigente. Word y PowerPoint permanecen deshabilitados.
