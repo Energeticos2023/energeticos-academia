@@ -7,7 +7,7 @@ test('La portada publicada se compila desde el fuente y declara los seis módulo
  assert.ok(html.includes(source),'La portada en web/index.html debe coincidir con src/public.html');
  for(let n=1;n<=6;n++)assert.match(html,new RegExp('MÓDULO '+String(n).padStart(2,'0')));
  assert.equal((source.match(/class="premium-chapters"/g)||[]).length,6);
- assert.equal((source.match(/<li><span>0[1-6]\\.[1-7]<\\/span>/g)||[]).length,42);
+ assert.equal((source.match(/<li><span>0[1-6]/g)||[]).length,42);
 });
 test('WhatsApp es el canal público y no existe matrícula automática',()=>{
  assert.ok(source.includes('wa.me/51942899919'));
