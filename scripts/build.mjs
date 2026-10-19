@@ -9,6 +9,14 @@ if(process.env.SUPABASE_URL || process.env.SUPABASE_PUBLISHABLE_KEY) {
  const {writeFile}=await import('node:fs/promises');
  await writeFile('web/config.js','window.ACADEMY_CONFIG = Object.freeze('+JSON.stringify(config)+');\n');
 }
+// Mantener la portada compilada sincronizada con el fuente sin tocar el aula existente.
+const sourcePublic=await readFile('src/public.html','utf8');
+const page=await readFile('web/index.html','utf8');
+const publicStart=page.indexOf('<div id="public-view">');
+const classroomStart=page.indexOf('<div id="classroom" hidden>');
+if(publicStart<0||classroomStart<publicStart)throw new Error('No se encontró el contenedor público o el aula privada.');
+const {writeFile:writePage}=await import('node:fs/promises');
+await writePage('web/index.html',page.slice(0,publicStart)+sourcePublic+'\\n'+page.slice(classroomStart));
 await build({ entryPoints:['src/auth.mjs'], bundle:true, minify:true, format:'esm', target:['es2022'], outfile:'web/auth.bundle.js', legalComments:'eof' });
 async function scan(dir) {
  for (const file of await readdir(dir,{withFileTypes:true})) {

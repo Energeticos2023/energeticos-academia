@@ -1,5 +1,6 @@
 export function initEnrollment(client) {
  const form=document.querySelector('#enrollment-form');
+ if(!form)return;
  const message=document.querySelector('#enrollment-message');
  let busy=false;
  form.addEventListener('submit',async event=>{
