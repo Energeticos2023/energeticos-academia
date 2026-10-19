@@ -18,6 +18,19 @@ if(publicStart<0||classroomStart<publicStart)throw new Error('No se encontró el
 const {writeFile:writePage}=await import('node:fs/promises');
 await writePage('web/index.html',page.slice(0,publicStart)+sourcePublic+'\n'+page.slice(classroomStart));
 await build({ entryPoints:['src/auth.mjs'], bundle:true, minify:true, format:'esm', target:['es2022'], outfile:'web/auth.bundle.js', legalComments:'eof' });
+// Versiona los recursos con un hash de su contenido para que, después de cada publicación,
+// el navegador descargue siempre los archivos nuevos y no use una copia en caché.
+{
+ const {createHash}=await import('node:crypto');
+ const {writeFile:writeVersioned}=await import('node:fs/promises');
+ let html=await readFile('web/index.html','utf8');
+ for(const asset of ['styles.css','auth.css','assessments.css','config.js','app.js','auth.bundle.js']){
+  const hash=createHash('sha256').update(await readFile('web/'+asset)).digest('hex').slice(0,10);
+  const escaped=asset.replace('.','\\.');
+  html=html.replace(new RegExp('(src|href)="'+escaped+'(?:\\?v=[0-9a-f]+)?"','g'),`$1="${asset}?v=${hash}"`);
+ }
+ await writeVersioned('web/index.html',html);
+}
 async function scan(dir) {
  for (const file of await readdir(dir,{withFileTypes:true})) {
   const name=path.join(dir,file.name);
