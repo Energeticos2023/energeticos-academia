@@ -1,6 +1,47 @@
 const labels={pending:'Pendiente',contacted:'Contactado',closed:'Cerrado'};
 export function createAdminPanel(client) {
  const panel=document.querySelector('#admin-view');
+ const previewLoad=panel.querySelector('#preview-load');
+ const previewSelect=panel.querySelector('#preview-lesson');
+ const previewControls=panel.querySelector('#preview-controls');
+ const previewBody=panel.querySelector('#preview-body');
+ const previewStatus=panel.querySelector('#preview-status');
+ let previewLessons=[];
+ function showPreviewLesson(){
+   const lesson=previewLessons.find(l=>l.id===previewSelect.value);
+   if(!lesson)return;
+   previewBody.replaceChildren();
+   const title=document.createElement('h3');title.textContent=lesson.title;
+   const description=document.createElement('p');description.textContent='Vista docente sin calificaciones ni progreso.';
+   const rendered=document.createElement('div');rendered.className='admin-preview-content';
+   // Material del paquete controlado por administración; sanitizar toda etiqueta y atributo no seguro.
+   const raw=new DOMParser().parseFromString(String(lesson.html||''),'text/html');
+   const safeTags=new Set(['H2','H3','P','STRONG','EM','BR','UL','OL','LI','ASIDE']);
+   for(const element of [...raw.body.querySelectorAll('*')]){
+     if(!safeTags.has(element.tagName)){element.replaceWith(document.createTextNode(element.textContent||''));continue;}
+     for(const attr of [...element.attributes])element.removeAttribute(attr.name);
+   }
+   rendered.innerHTML=raw.body.innerHTML;
+   previewBody.append(title,description,rendered);
+ }
+ previewSelect?.addEventListener('change',showPreviewLesson);
+ previewLoad?.addEventListener('click',async()=>{
+   if(!client){previewStatus.textContent='Sin conexión al campus.';return;}
+   previewLoad.disabled=true;previewStatus.textContent='Verificando el permiso administrativo…';
+   try{
+     const {data:allowed,error:permission}=await client.rpc('is_academy_admin');
+     if(permission||!allowed)throw new Error('Solo el administrador autorizado puede abrir la vista previa.');
+     const {data,error}=await client.rpc('get_module_package',{requested_package:'m1-pedagogico-v2-2-test'});
+     if(error||!Array.isArray(data?.lessons))throw new Error('No se pudo leer el paquete del módulo.');
+     previewLessons=data.lessons;
+     previewSelect.replaceChildren();
+     for(const lesson of previewLessons){const o=document.createElement('option');o.value=lesson.id;o.textContent=lesson.title;previewSelect.add(o);}
+     previewSelect.disabled=false;previewControls.hidden=false;showPreviewLesson();
+     previewStatus.textContent=previewLessons.length+' actividades privadas cargadas. Modo docente de solo lectura.';
+   }catch(e){previewStatus.textContent=e.message||'Vista previa no disponible.';}
+   finally{previewLoad.disabled=false;}
+ });
+
  const status=panel.querySelector('[role="status"]');
  const list=panel.querySelector('#registration-list');
  let page=0,rows=[],loading=false;
