@@ -73,7 +73,11 @@ async function openClassroom() {
     if(location.hash==='#administracion')throw new Error('Esta cuenta no tiene permiso de administrador.');
     await assertEnrollment();
     if(window.academyStarted && window.academyUserId!==session.user.id){location.replace(redirectTo());return;}
-    const course = sanitizeLessons(JSON.parse(await (await downloadPrivate(COURSE_ID+'/module-1/course-data.json')).text()));
+    // El paquete de pruebas se lee por RPC con autorización y RLS en servidor.
+    // Nunca se entrega el banco de evaluación ni material editable de docente.
+    const {data:testingPackage,error:packageError}=await client.rpc('get_module_package',{requested_package:'m1-pedagogico-v2-2-test'});
+    if(packageError||!testingPackage)throw new Error('El Módulo 1 de prueba todavía no está disponible para tu cuenta.');
+    const course=sanitizeLessons(testingPackage);
     const progress=await client.from('student_progress').select('state').eq('user_id',session.user.id).eq('course_id',COURSE_ID).maybeSingle();
     if(progress.error)throw new Error('No se pudo cargar tu progreso. Intenta nuevamente.');
     window.COURSE=course;
@@ -102,14 +106,12 @@ async function openClassroom() {
 
 document.addEventListener('click',async e=>{
   const a=e.target.closest('a');if(!a)return;
-  const match=(a.getAttribute('href')||'').match(/^materiales\/(manual-modulo-1\.docx|presentacion-modulo-1\.pptx)$/);
-  if(!match)return;e.preventDefault();e.stopImmediatePropagation();
-  if(!active||!session)return showPublic('Inicia sesión para descargar los materiales.');
-  const original=a.getAttribute('aria-busy');a.setAttribute('aria-busy','true');
-  try {
-    const blob=await downloadPrivate(COURSE_ID+'/module-1/materiales/'+match[1]);
-    const url=URL.createObjectURL(blob);const download=document.createElement('a');download.href=url;download.download=match[1];download.click();setTimeout(()=>URL.revokeObjectURL(url),60000);
-  } catch(error) {alert(error.message);}finally{if(original)a.setAttribute('aria-busy',original);else a.removeAttribute('aria-busy');}
+  // Evitar descargas de archivos editables históricos; el PDF se habilitará
+  // exclusivamente cuando esté cargado en Storage privado y autorizado.
+  if(/^materiales\/(?:manual-modulo-1\.docx|presentacion-modulo-1\.pptx)$/.test(a.getAttribute('href')||'')){
+    e.preventDefault();e.stopImmediatePropagation();
+    alert('Las descargas Word y PowerPoint están deshabilitadas. El manual PDF autorizado se incorporará al aula después de su validación.');
+  }
 },true);
 
 $('#go-reset').addEventListener('click',()=>{$('#login-form').hidden=true;$('#reset-form').hidden=false;status('Indica el correo asociado a tu matrícula.');});
