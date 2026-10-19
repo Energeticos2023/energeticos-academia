@@ -8,7 +8,7 @@ const config = window.ACADEMY_CONFIG;
 const $ = s => document.querySelector(s);
 let client, session, heartbeat, admin, active=false, loading=false, saveTimer;
 const objectUrls = new Map();
-const COURSE_ID = config.courseId;
+const COURSE_ID = config?.courseId || 'flotas-electricas-peru';
 const recoveryType = new URLSearchParams(location.hash.slice(1)).get('type');
 const status = (message, type='info') => { $('#auth-status').textContent=message; $('#auth-status').dataset.type=type; };
 const setBusy = (value) => document.querySelectorAll('.auth-form button').forEach(b => b.disabled=value);
@@ -131,7 +131,7 @@ $('#login-form').addEventListener('submit',async e=>{
   try {
     const {error}=await client.auth.signInWithPassword({email:$('#login-email').value.trim(),password:$('#login-password').value});
     $('#login-password').value='';
-    if(error)return status('No se pudo iniciar sesión. Revisa tu correo y contraseña o recupera tu acceso.','error');
+    if(error)return status('No se pudo iniciar sesión. Debes haber recibido una invitación de ENERGÉTICOS Academia y haber definido tu contraseña. Si ya tienes cuenta, verifica tus datos o usa recuperación.','error');
     await openClassroom();
   } catch{status('No se pudo conectar. Intenta nuevamente.','error');}finally{setBusy(false);}
 });
@@ -171,6 +171,7 @@ try {
     if(error)status('El enlace de acceso no es válido o ha vencido. Solicita uno nuevo.','error');
     else if(data.session && ['recovery','invite'].includes(recoveryType))showPassword();
     else if(data.session)await openClassroom();
+    else status('Acceso restringido: primero debes recibir una invitación y definir tu contraseña. Si estás probando el campus, solicita al administrador la activación de tu cuenta.');
   } else {
     initEnrollment(null);
     status('Inscripciones por apertura. El acceso de alumnos se habilitará próximamente.');
